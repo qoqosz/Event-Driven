@@ -1,0 +1,5 @@
+2017.10.29 11:37:50.050 Event1 lorem ipsum a=1, b=2.03
+2017.10.29 11:37:50.142 Event1 lorem ipsum a=1, b=2.03
+2017.10.29 11:37:50.201 Event2 lorem ipsum dolor sit=1.9543 abc="txt"
+2017.10.29 11:37:50.210 Event1 lorem ipsum a=1.1, b=2.01
+2017.10.29 11:37:50.452 Error lorem ipsum errorum
