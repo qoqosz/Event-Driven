@@ -1,4 +1,4 @@
-from events import Handler, Event, Listener, Data, DataParser
+from events import Handler, Event, Listener, Data, Parser
 
 # Dynamically check what events should be created - yield
 
@@ -13,7 +13,7 @@ class LogData(Data):
                 yield line
 
 
-class LogParser(DataParser):
+class LogParser(Parser):
     def get_code (self, line):
         spaces = [i for i, char in enumerate(line)
                   if char == ' ']
@@ -53,7 +53,7 @@ class Event1(Event):
     def __init__(self, a, b):
         self.a, self.b = a, b
 
-    def set_from(self, line):
+    def from_line(self, line):
         self.a, self.b = 0.1, 0.2
 
     @property
@@ -67,7 +67,7 @@ class Event2(Event):
     def __init__(self, sit, abc):
         self.sit, self.abc = sit, abc
 
-    def set_from(self, line):
+    def from_line(self, line):
         self.sit, self.abc = 'sit', 'abc'
 
     @property
