@@ -1,60 +1,28 @@
-from events import Handler, Event, Listener, Data, Parser
-
-# Dynamically check what events should be created - yield
-
-
-class LogData(Data):
-    def __init__(self, log):
-        self.log = log
-
-    def __iter__(self):
-        with open(self.log) as f:
-            for line in f:
-                yield line
+from events import Handler, Event, Listener
+from logevents import LogData, LogParser
+import logging
+import re
+#import ipdb
 
 
-class LogParser(Parser):
-    def get_code (self, line):
-        spaces = [i for i, char in enumerate(line)
-                  if char == ' ']
-        start, end = spaces[1:3]
+def find_float(var, line, sep='='):
+    m = re.search(var + sep + '(\d+\.*\d*)', line)
+    if m:
+        return float(m.group(1))
+    raise ValueError('Cannot match ' + var)
 
-        return line[start+1:end]
-
-    def parse(self, line):
-        code = self.get_code(line)
-        return Event(code, line)
-
-
-class Event1and2Listener(Listener):
-    codes = ['Event1', 'Event2']
-
-    def process(self, event):
-        print(f'Caught {event.code} with value {event.value}')
-
-
-class Event1Listerner(Listener):
-    codes = ['Event1']
-
-    def process(self, event):
-        print(f'Caught {event.code} by Event1Listerner')
-
-
-class Event2Listerner(Listener):
-    codes = ['Event2']
-
-    def process(self, event):
-        print(f'Caught {event.code} by Event2Listerner')
+def find_string(var, line, sep='=', within='"'):
+    m = re.search(var + sep + within + '(\w+)' + within, line)
+    if m:
+        return m.group(1)
+    raise ValueError('Cannot match ' + var)
 
 
 class Event1(Event):
     code = 'Event1'
 
-    def __init__(self, a, b):
-        self.a, self.b = a, b
-
     def from_line(self, line):
-        self.a, self.b = 0.1, 0.2
+        self.a, self.b = find_float('a', line), find_float('b', line)
 
     @property
     def value(self):
@@ -64,27 +32,70 @@ class Event1(Event):
 class Event2(Event):
     code = 'Event2'
 
-    def __init__(self, sit, abc):
-        self.sit, self.abc = sit, abc
-
     def from_line(self, line):
-        self.sit, self.abc = 'sit', 'abc'
+        self.sit, self.abc = find_float('sit', line), find_string('abc', line)
 
     @property
     def value(self):
-        return f'sit={self.sit}, abc={self.abc}'
+         return f'sit={self.sit}, abc={self.abc}'
+
+
+class ListenerEvent(Event):
+    code = 'Event3'
+
+    def __init__(self, value):
+        self.value = value
+
+
+class Event1and2Listener(Listener):
+    codes = ('Event1', 'Event2')
+
+    def process(self, event):
+        print(f'Caught {event.code} with value {event.value} by '
+              'Event1and2Listener')
+        #ipdb.set_trace()
+        e1, e2 = (ListenerEvent(value='event emitted by listener'),
+                  ListenerEvent(value='another event emitted by listener'))
+        print(f'Code check: {e1.code}, {e2.code}')
+        self.emit(e1)
+        self.emit(e2)
+        print('Signals emitted')
+
+
+class Event1Listener(Listener):
+    codes = ('Event1', )
+
+    def process(self, event):
+        print(f'Caught {event.code} by Event1Listerner')
+
+
+class Event2Listener(Listener):
+    codes = ('Event2', )
+
+    def process(self, event):
+        print(f'Caught {event.code} by Event2Listerner')
+
+
+class Event3Listener(Listener):
+    codes = ('Event3', )
+
+    def process(self, event):
+        print(f'Caught {event.code} created by other listener')
 
 
 if __name__ == '__main__':
+    logger = logging.getLogger()
+    FORMAT = "[%(filename)s:%(lineno)s - %(name)s %(funcName)s()] %(message)s"
+    logging.basicConfig(format=FORMAT)
+    logger.setLevel(logging.INFO)
+
+
     log = LogData('data.txt')
     parser = LogParser(log)
 
-    events_listener = Event1and2Listener()
-    ev1_l = Event1Listerner()
-    ev2_l = Event2Listerner()
-
     handler = Handler(parser)
-    handler.add_listener(events_listener)
-    handler.add_listener(ev1_l)
-    handler.add_listener(ev2_l)
+    handler.add_listener(Event1and2Listener()) \
+           .add_listener(Event1Listener()) \
+           .add_listener(Event2Listener()) \
+           .add_listener(Event3Listener())
     handler.run()

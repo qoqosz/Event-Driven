@@ -1,4 +1,6 @@
-from abc import ABCMeta, abstractmethod
+from abc import ABC, abstractmethod
+from collections import deque
+import logging
 
 
 class Handler(object):
@@ -12,8 +14,14 @@ class Handler(object):
         List events.Listener that may process event from the main loop.
     """
     def __init__(self, parser, listeners=None):
+        self.log = logging.getLogger(self.__class__.__name__)
         self.parser = parser
-        self.listeners = [] if listeners is None else listeners
+        self.queue = deque()
+        self.listeners = []
+        if listeners is not None:
+            for listener in listeners:
+                self = self.add_listener(listener)
+        self.log.debug('Handler created.')
 
     def notify(self, event=None):
         """Notifies all listeners about new event.
@@ -23,6 +31,7 @@ class Handler(object):
         event : events.Event, optional
             If provided, all subscribed listeners will be notified about event.
         """
+        self.log.debug('Running notify loop.')
         if event is not None:
             for listener in self.listeners:
                 listener.receive(event)
@@ -39,86 +48,74 @@ class Handler(object):
         self : events.Handler
             Returns self for chaining.
         """
+        listener.handler = self
         self.listeners.append(listener)
+        self.log.debug('Added listener.')
 
         return self
 
+    def enqueue(self, event):
+        """Adds event to the queue."""
+        self.queue.append(event)
+        self.log.debug('Added event to queue: %r', event)
+
     def run(self):
-        """Runs the main events loop.
-        """
+        """Runs the main events loop."""
         for event in self.parser:
-            self.notify(event)
+            if not event:
+                continue
+            self.enqueue(event)
+
+            while self.queue:
+                e = self.queue.popleft()
+                self.log.debug('Notifying listeners about event: %r, '
+                               'queue len: %d.',
+                               e, 1+len(self.queue))
+                self.notify(e)
+                self.log.debug('Done with notifying.')
 
 
-class Event(object):
-    """Defines a generic event. Event is transformed to a specific subclass
-    instance based on a code provided.
-
-    Parameters
-    ----------
-    code : string
-        Event's code for subclass transformation.
-    line : raw data
-        Raw data from the underlying events.Data object.
-    """
-
+class Event(ABC):
+    """Defines a generic event. Specific events should be directly inherited
+    from this class."""
     code = '__GenericEvent__'
 
-    def __init__(self, code, line):
-        for sub in Event.__subclasses__():
-            if sub.code == code:
-                self.__class__ = sub
-                self.from_line(line)
+    def __repr__(self):
+        return self.code + ' ' + str(self.value)
 
     def from_line(self, line):
-        """Converts raw data input into Event object.
-        Each subclass should implement this method.
-
-        Parameters
-        ----------
-        line : raw data
-            Raw data."""
         raise NotImplementedError('Implement from_line()')
 
 
-class Listener(object):
+class Listener(ABC):
     """Abstract Base Class (ABC) for classes that will handle events
     processing."""
-    __metaclass__ = ABCMeta
+    codes = tuple()
 
-    codes = ('__GenericEvent__', )
+    def __init__(self):
+        self.handler = None
+        self.log = logging.getLogger(self.__class__.__name__)
 
     def receive(self, event):
         if event.code in self.codes:
             self.process(event)
 
+    def emit(self, event):
+        self.handler.enqueue(event)
+        self.log.debug('Emitted event: %r', event)
+
     @abstractmethod
     def process(self, event):
-        """Processes received event. To be implemented in each subclass."""
         raise NotImplementedError('Implement process()')
 
 
-class Data(object):
-    """Abstract class for data handling. There is only one requirement imposed
-    on a Data object - it has to be iterable."""
-    __metaclass__ = ABCMeta
-
+class Data(ABC):
     @abstractmethod
     def __iter__(self):
         raise NotImplementedError('Implement __iter__()')
 
 
-class Parser(object):
-    """Parser takes data as an input, processes each line in a stream and
-    yields event by event.
-
-    Parameters
-    ----------
-    data : events.Data
-        Data object.
-    """
-    __metaclass__ = ABCMeta
-
+class Parser(ABC):
     def __init__(self, data):
         self.data = data
 
@@ -128,11 +125,4 @@ class Parser(object):
 
     @abstractmethod
     def parse(self, line):
-        """Converts line to a coresponding events. To be implemented in a
-        subclass.
-
-        Parameters
-        ----------
-        line : raw data
-        """
         raise NotImplementedError('Implement parse()')
