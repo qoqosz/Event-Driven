@@ -75,7 +75,7 @@ class Handler(object):
                 self.log.debug('Done with notifying.')
 
 
-class Event(ABC):
+class Event():
     """Defines a generic event. Specific events should be directly inherited
     from this class."""
     code = '__GenericEvent__'
